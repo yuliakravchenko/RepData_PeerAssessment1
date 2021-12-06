@@ -1,12 +1,12 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
 output: 
-  html_document:
-    keep_md: true
+  html_document: 
+    keep_md: yes
 ---
 
 
-## Loading and preprocessing the data
+## Load and preprocess the data
 
 ```{r load data}
 activity <- read.csv("activity.csv")
@@ -48,7 +48,7 @@ stepsbyinterval <- activity %>% group_by(interval) %>% summarize(meansteps=round
 maxstepsinterval <- filter(stepsbyinterval, meansteps == max(meansteps))
 
 
-qplot(interval, meansteps, data=stepsbyinterval) + geom_vline(xintercept=maxstepsinterval$interval, color="red") + labs(title="Daily activity pattern", x="5-mins time interval", y="average number of steps") + scale_x_discrete(breaks=c("00:00","06:00","08:35","12:00","16:00","20:00", "23:00"))
+ggplot(stepsbyinterval, aes(interval, meansteps, group = 1)) + geom_line() + geom_vline(xintercept=maxstepsinterval$interval, color="red") + labs(title="Daily activity pattern", x="5-mins time interval", y="average number of steps")  + scale_x_discrete(breaks=c("00:00","06:00","08:35","12:00","16:00","20:00", "23:00"))
 
 ```
 
@@ -69,21 +69,24 @@ All these NAs are in the *steps* column.
 
 ```{r look at those missing values}
 activityNA <- filter(activity, is.na(steps))
-table(activityNA$date)
+```
 
+#### Days with missing values
+```{r days with missing values}
 datesNA <- unique(activityNA$date)
+datesNA
 length(datesNA)
 ```
 
-Actually, all missing values belong to 8 dates, when no observations were recorded: `r datesNA`
-
+Actually, all missing values belong to 8 dates, when no observations were recorded.
 For all other days the record is full, no intervals with missing data.
-
-If we fill in those missing values with average number of steps of the correcponding interval, the total number of steps for that day will be **`r sum(stepsbyinterval$meansteps)` steps**, that is MORE than mean of the total number of steps taken per day (**`r meandailytotal` steps**). That is, we will make those missing days more active than our average day. To avoid that, we will scale our average numbers of steps per interval by factor "average daily total number of steps / sum of mean number of steps per interval" - (**`r meandailytotal/sum(stepsbyinterval$meansteps)`**).
 
 
 #### Filling in NAs
+If we fill in those missing values with average number of steps of the correcponding interval, the total number of steps for that day will be **`r as.integer(sum(stepsbyinterval$meansteps))` steps**, that is MORE than mean of the total number of steps taken per day (**`r meandailytotal` steps**). That is, we will make those missing days more active than our average day. To avoid that, we will scale our average numbers of steps per interval by factor "average daily total number of steps / sum of mean number of steps per interval" - (**`r meandailytotal/sum(stepsbyinterval$meansteps)`**).
+
 Let's fill in these missing values with the mean value of that time interval scaled by the factor mentioned above.
+
 ```{r filling in NAs}
 s <- meandailytotal / sum(stepsbyinterval$meansteps)
 activityF <- activity %>% group_by(date) %>% mutate(steps = ifelse(date %in% datesNA, round(stepsbyinterval$meansteps * s, digits=0), steps)) %>% as.data.frame
@@ -124,7 +127,9 @@ activityF <- activityF %>% mutate(weekday = weekdays(as.Date(date))) %>% mutate(
 
 stepsbyintervalF <- activityF %>% group_by(daycat, interval) %>% summarize(meansteps=round(mean(steps), digits=0))
 
-qplot(interval, meansteps, data=stepsbyintervalF, facets=daycat ~.) + labs(title="Daily activity pattern", x="5-mins time interval", y="average number of steps") + scale_x_discrete(breaks=c("00:00","06:00","08:35","12:00","16:00","20:00", "23:00"))
+ggplot(stepsbyintervalF, aes(interval, meansteps, group = 1)) + geom_line() + facet_wrap(daycat ~.) + labs(title="Daily activity pattern", x="5-mins time interval", y="average number of steps")  + scale_x_discrete(breaks=c("00:00","06:00","08:35","12:00","16:00","20:00", "23:00"))
+
+
 
 ```
 

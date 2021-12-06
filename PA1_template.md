@@ -6,7 +6,7 @@ output:
 ---
 
 
-## Loading and preprocessing the data
+## Load and preprocess the data
 
 
 ```r
