@@ -8,18 +8,131 @@ output:
 
 ## Loading and preprocessing the data
 
+```{r load data}
+activity <- read.csv("activity.csv")
+summary(activity)
+
+
+library(dplyr)
+library(ggplot2)
+
+
+activity <- transform(activity, interval=paste(as.character(sprintf("%02d", interval%/%100)), as.character(sprintf("%02d", interval%%100)), sep=":"))
+activity <- transform(activity, date=factor(date), interval=factor(interval))
+
+summary(activity)
+```
+
 
 
 ## What is mean total number of steps taken per day?
+```{r mean total steps}
+stepsbyday <- activity %>% group_by(date) %>% summarize(totalsteps=sum(steps, na.rm=TRUE))
+summary(stepsbyday)
+
+
+qplot(totalsteps, data=stepsbyday, bins=20) + labs(title="Total daily activity", x="total number of steps", y="count")
+
+meandailytotal <- round(mean(stepsbyday$totalsteps), digits=0)
+```
+
+**Mean** of the total number of steps taken per day is **`r meandailytotal` steps**
+
+**Median** of the total number of steps taken per day is **`r median(stepsbyday$totalsteps)` steps**
 
 
 
 ## What is the average daily activity pattern?
+```{r daily activity pattern}
+stepsbyinterval <- activity %>% group_by(interval) %>% summarize(meansteps=round(  mean(steps, na.rm=TRUE), digits=0))
+maxstepsinterval <- filter(stepsbyinterval, meansteps == max(meansteps))
+
+
+qplot(interval, meansteps, data=stepsbyinterval) + geom_vline(xintercept=maxstepsinterval$interval, color="red") + labs(title="Daily activity pattern", x="5-mins time interval", y="average number of steps") + scale_x_discrete(breaks=c("00:00","06:00","08:35","12:00","16:00","20:00", "23:00"))
+
+```
+
+Maximum mean number of steps during 5-minute interval, on average across all the days in the dataset: **`r maxstepsinterval$meansteps`**
+
+Corresponding interval with the maximum activity: **`r maxstepsinterval$interval`**
 
 
 
 ## Imputing missing values
+Let's check for the missing values in the dataset
+```{r NA check}
+colSums(is.na(activity))
+```
+
+So, the total number of missing values in the dataset - **`r sum(is.na(activity))`**, that's `r round(sum(is.na(activity))/nrow(activity)*100, digits=1)`% of the total number of observations.
+All these NAs are in the *steps* column.
+
+```{r look at those missing values}
+activityNA <- filter(activity, is.na(steps))
+table(activityNA$date)
+
+datesNA <- unique(activityNA$date)
+length(datesNA)
+```
+
+Actually, all missing values belong to 8 dates, when no observations were recorded: `r datesNA`
+
+For all other days the record is full, no intervals with missing data.
+
+If we fill in those missing values with average number of steps of the correcponding interval, the total number of steps for that day will be **`r sum(stepsbyinterval$meansteps)` steps**, that is MORE than mean of the total number of steps taken per day (**`r meandailytotal` steps**). That is, we will make those missing days more active than our average day. To avoid that, we will scale our average numbers of steps per interval by factor "average daily total number of steps / sum of mean number of steps per interval" - (**`r meandailytotal/sum(stepsbyinterval$meansteps)`**).
+
+
+#### Filling in NAs
+Let's fill in these missing values with the mean value of that time interval scaled by the factor mentioned above.
+```{r filling in NAs}
+s <- meandailytotal / sum(stepsbyinterval$meansteps)
+activityF <- activity %>% group_by(date) %>% mutate(steps = ifelse(date %in% datesNA, round(stepsbyinterval$meansteps * s, digits=0), steps)) %>% as.data.frame
+
+summary(activity)
+summary(activityF)
+```
+
+
+#### How the daily totals changed after we filled in missing values.
+
+```{r what changed after filling in NAs}
+stepsbydayF <- activityF %>% group_by(date) %>% summarize(totalsteps=sum(steps, na.rm=TRUE))
+summary(stepsbydayF)
+summary(stepsbyday)
+
+library(patchwork)
+
+q1 <- qplot(totalsteps, data=stepsbyday, bins=20, fill = I("blue")) + labs(title="Total daily activity WITH NAs", x="total number of steps", y="count")
+q2 <- qplot(totalsteps, data=stepsbydayF, bins=20, fill = I("orange")) + labs(title="Total daily activity WITHOUT NAs", x="total number of steps", y="count")
+q1 + q2
+
+meandailytotalF <- round(mean(stepsbydayF$totalsteps), digits=0)
+```
+
+**New mean** of the total number of steps taken per day is **`r as.integer(meandailytotalF)` steps** (compared to **`r meandailytotal` steps** before filling in NAs).
+
+**New median** of the total number of steps taken per day is **`r as.integer(median(stepsbydayF$totalsteps))` steps** (compared to **`r median(stepsbyday$totalsteps)` steps** before filling in NAs)
+
 
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r weekend and weekdays activity patterns}
+
+
+activityF <- activityF %>% mutate(weekday = weekdays(as.Date(date))) %>% mutate(daycat = factor(1*(weekday %in% c("Saturday", "Sunday")), labels = c("weekday","weeekend")))
+
+stepsbyintervalF <- activityF %>% group_by(daycat, interval) %>% summarize(meansteps=round(mean(steps), digits=0))
+
+qplot(interval, meansteps, data=stepsbyintervalF, facets=daycat ~.) + labs(title="Daily activity pattern", x="5-mins time interval", y="average number of steps") + scale_x_discrete(breaks=c("00:00","06:00","08:35","12:00","16:00","20:00", "23:00"))
+
+```
+
+So what is the interval with maximum average number of steps?
+
+```{r maximum activity interval}
+maxstepsintervalF <- filter(stepsbyintervalF, meansteps == max(meansteps))  %>% as.data.frame
+maxstepsintervalF
+
+```
+On weekends this person didn't go to work, but was a bit more active throughout the day.
